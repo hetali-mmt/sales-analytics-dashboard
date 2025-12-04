@@ -1,8 +1,9 @@
-import { useState, useMemo, useCallback } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { DndProvider, useDrag, useDrop } from 'react-dnd'
 import { HTML5Backend } from 'react-dnd-html5-backend'
+import { useSearchParams } from 'react-router-dom'
 import { apiService } from '@/services/api'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
@@ -72,13 +73,19 @@ function SessionRow({ session, style, onClick, onHover, isSelected, onSelect, sh
             e.stopPropagation()
             onSelect(e.target.checked)
           }}
+          onClick={(e) => e.stopPropagation()}
           className="rounded"
         />
       )}
       <div className="flex-1 min-w-0">
         <p className="font-medium truncate">{session.title}</p>
-        <p className="text-sm text-muted-foreground">
-          {format(parseISO(session.created_at), 'MMM dd, yyyy HH:mm')}
+      </div>
+      <div className="text-center w-20">
+        <p className="text-sm font-mono">{session.user_id.slice(-6)}</p>
+      </div>
+      <div className="text-center w-32">
+        <p className="text-xs text-muted-foreground">
+          {format(parseISO(session.created_at), 'MMM dd, HH:mm')}
         </p>
       </div>
       {visibleColumns.score && (
@@ -115,11 +122,13 @@ function SessionRow({ session, style, onClick, onHover, isSelected, onSelect, sh
 }
 
 export function SessionList() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [selectedSessions, setSelectedSessions] = useState<Set<string>>(new Set())
   const [showBulkActions, setShowBulkActions] = useState(false)
   const [bulkFeedback, setBulkFeedback] = useState('')
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
   const [sessions, setSessions] = useState<Session[]>([])
+  const [showColumnDropdown, setShowColumnDropdown] = useState(false)
   const [visibleColumns, setVisibleColumns] = useState<ColumnConfig>(() => {
     const saved = localStorage.getItem('sessionColumns')
     return saved ? JSON.parse(saved) : {
@@ -130,10 +139,18 @@ export function SessionList() {
       duration: true,
     }
   })
+  
+  // Local filter states for immediate UI updates
+  const [localSearch, setLocalSearch] = useState('')
+  const [localScoreMin, setLocalScoreMin] = useState<number | ''>(SCORE_RANGES.MIN)
+  const [localScoreMax, setLocalScoreMax] = useState<number | ''>(SCORE_RANGES.MAX)
+  const [localDateFrom, setLocalDateFrom] = useState('')
+  const [localDateTo, setLocalDateTo] = useState('')
+  const [localTeam, setLocalTeam] = useState<string>('')
+  
   const queryClient = useQueryClient()
   
   const [urlState, updateUrlState] = useUrlState({
-    page: 1,
     pageSize: PAGINATION.DEFAULT_PAGE_SIZE,
     search: '',
     sortBy: 'created_at' as const,
@@ -144,25 +161,73 @@ export function SessionList() {
     dateTo: '',
     team: undefined as 'Sales' | 'Executive' | 'Engineering' | undefined,
     sessionId: '',
-  }, 300, true)
+  }, 500, true)
 
   useWebSocket()
 
-  const { data: sessionsData, isLoading } = useQuery({
+  const {
+    data: sessionsData,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: ['sessions', urlState],
-    queryFn: () => {
+    queryFn: ({ pageParam = 1 }) => {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { sessionId, ...queryParams } = urlState
-      return apiService.getSessions(queryParams)
+      // Send all filters to API
+      const serverParams = {
+        page: pageParam,
+        pageSize: queryParams.pageSize,
+        sortBy: queryParams.sortBy,
+        sortOrder: queryParams.sortOrder,
+        search: queryParams.search,
+        scoreMin: queryParams.scoreMin,
+        scoreMax: queryParams.scoreMax,
+        dateFrom: queryParams.dateFrom,
+        dateTo: queryParams.dateTo,
+        team: queryParams.team,
+      }
+      return apiService.getSessions(serverParams)
     },
+    getNextPageParam: (lastPage, allPages) => {
+      const totalLoaded = allPages.reduce((sum, page) => sum + page.sessions.length, 0)
+      return totalLoaded < lastPage.total ? allPages.length + 1 : undefined
+    },
+    initialPageParam: 1,
   })
 
+  // Flatten all pages into single sessions array
+  const allSessions = useMemo(() => {
+    return sessionsData?.pages.flatMap(page => page.sessions) ?? []
+  }, [sessionsData])
+
+  const totalSessions = sessionsData?.pages[0]?.total ?? 0
+
   // Update local sessions when API data changes
-  useState(() => {
-    if (sessionsData?.sessions) {
-      setSessions(sessionsData.sessions)
+  useEffect(() => {
+    console.log('API Sessions received:', allSessions.length, allSessions)
+    setSessions(allSessions)
+  }, [allSessions])
+
+  // Initialize local filter states from URL state
+  useEffect(() => {
+    setLocalSearch(urlState.search)
+    setLocalScoreMin(urlState.scoreMin)
+    setLocalScoreMax(urlState.scoreMax)
+    setLocalDateFrom(urlState.dateFrom)
+    setLocalDateTo(urlState.dateTo)
+    setLocalTeam(urlState.team || '')
+  }, [urlState.search, urlState.scoreMin, urlState.scoreMax, urlState.dateFrom, urlState.dateTo, urlState.team])
+
+  // Handle URL-based modal opening
+  useEffect(() => {
+    const sessionId = searchParams.get('sessionId')
+    if (sessionId && sessionId !== selectedSessionId) {
+      setSelectedSessionId(sessionId)
     }
-  })
+  }, [searchParams, selectedSessionId])
 
   // Prefetch session details on hover
   const prefetchSession = useCallback((sessionId: string) => {
@@ -173,23 +238,117 @@ export function SessionList() {
   }, [queryClient])
 
   const filteredSessions = useMemo(() => {
-    return sessions.filter(session => {
-      const matchesSearch = !urlState.search || session.title.toLowerCase().includes(urlState.search.toLowerCase())
-      const matchesScore = session.score >= urlState.scoreMin && session.score <= urlState.scoreMax
-      const matchesDateFrom = !urlState.dateFrom || new Date(session.created_at) >= new Date(urlState.dateFrom)
-      const matchesDateTo = !urlState.dateTo || new Date(session.created_at) <= new Date(urlState.dateTo)
-      return matchesSearch && matchesScore && matchesDateFrom && matchesDateTo
+    console.log('Filtering sessions:', sessions.length, 'with filters:', {
+      search: urlState.search,
+      scoreMin: urlState.scoreMin,
+      scoreMax: urlState.scoreMax,
+      dateFrom: urlState.dateFrom,
+      dateTo: urlState.dateTo,
+      team: urlState.team
     })
-  }, [sessions, urlState.search, urlState.scoreMin, urlState.scoreMax, urlState.dateFrom, urlState.dateTo])
+    
+    if (sessions.length === 0) return []
+    
+    let filtered = [...sessions]
+    
+    // Apply frontend filters
+    if (urlState.search && urlState.search.trim()) {
+      const searchTerm = urlState.search.toLowerCase().trim()
+      filtered = filtered.filter(session => 
+        session.title.toLowerCase().includes(searchTerm)
+      )
+      console.log('After search filter:', filtered.length)
+    }
+    
+    // Score range filter
+    if (urlState.scoreMin > SCORE_RANGES.MIN || urlState.scoreMax < SCORE_RANGES.MAX) {
+      filtered = filtered.filter(session => 
+        session.score >= urlState.scoreMin && session.score <= urlState.scoreMax
+      )
+      console.log('After score filter:', filtered.length)
+    }
+    
+    // Date filters
+    if (urlState.dateFrom) {
+      filtered = filtered.filter(session => 
+        new Date(session.created_at) >= new Date(urlState.dateFrom)
+      )
+      console.log('After dateFrom filter:', filtered.length)
+    }
+    
+    if (urlState.dateTo) {
+      const endDate = new Date(urlState.dateTo)
+      endDate.setHours(23, 59, 59, 999) // End of day
+      filtered = filtered.filter(session => 
+        new Date(session.created_at) <= endDate
+      )
+      console.log('After dateTo filter:', filtered.length)
+    }
+    
+    // Team filter
+    if (urlState.team) {
+      // Note: sessions don't have team field, this might need user lookup
+      console.log('Team filter applied but sessions may not have team field')
+    }
+    
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let aVal: any, bVal: any
+      
+      switch (urlState.sortBy) {
+        case 'score':
+          aVal = a.score
+          bVal = b.score
+          break
+        case 'title':
+          aVal = a.title.toLowerCase()
+          bVal = b.title.toLowerCase()
+          break
+        case 'user_id':
+          aVal = a.user_id
+          bVal = b.user_id
+          break
+        case 'created_at':
+        default:
+          aVal = new Date(a.created_at)
+          bVal = new Date(b.created_at)
+          break
+      }
+      
+      if (urlState.sortOrder === 'asc') {
+        return aVal > bVal ? 1 : -1
+      } else {
+        return aVal < bVal ? 1 : -1
+      }
+    })
+    
+    console.log('Final filtered sessions:', filtered.length)
+    return filtered
+  }, [sessions, urlState.search, urlState.scoreMin, urlState.scoreMax, urlState.dateFrom, urlState.dateTo, urlState.team, urlState.sortBy, urlState.sortOrder])
 
-  const parentRef = useState<HTMLDivElement | null>(null)
+  const parentRef = useRef<HTMLDivElement | null>(null)
   
   const virtualizer = useVirtualizer({
     count: filteredSessions.length,
-    getScrollElement: () => parentRef[0],
+    getScrollElement: () => parentRef.current,
     estimateSize: () => VIRTUALIZATION.SESSION_ROW_HEIGHT,
     overscan: VIRTUALIZATION.OVERSCAN,
   })
+
+  // Infinite scroll effect
+  useEffect(() => {
+    const [lastItem] = [...virtualizer.getVirtualItems()].reverse()
+    
+    if (!lastItem) return
+    
+    if (
+      lastItem.index >= filteredSessions.length - 1 &&
+      hasNextPage &&
+      !isFetchingNextPage
+    ) {
+      fetchNextPage()
+    }
+  }, [virtualizer.getVirtualItems(), filteredSessions.length, hasNextPage, isFetchingNextPage, fetchNextPage])
 
   const handleSelectAll = () => {
     if (selectedSessions.size === filteredSessions.length) {
@@ -207,6 +366,19 @@ export function SessionList() {
         session_ids: Array.from(selectedSessions),
         feedback: bulkFeedback,
       })
+      
+      // Update local sessions with new feedback
+      setSessions(prev => prev.map(session => 
+        selectedSessions.has(session.id) 
+          ? { ...session, feedback: bulkFeedback }
+          : session
+      ))
+      
+      // Invalidate session detail cache for updated sessions
+      selectedSessions.forEach(sessionId => {
+        queryClient.invalidateQueries({ queryKey: ['sessionDetail', sessionId] })
+      })
+      
       setSelectedSessions(new Set())
       setBulkFeedback('')
       setShowBulkActions(false)
@@ -231,10 +403,18 @@ export function SessionList() {
     localStorage.setItem('sessionColumns', JSON.stringify(newColumns))
   }
 
-  if (isLoading) {
+  if (isLoading && !sessionsData) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
+
+  if (!isLoading && allSessions.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-200px)]">
+        <div className="text-muted-foreground text-lg">No sessions found</div>
       </div>
     )
   }
@@ -243,7 +423,9 @@ export function SessionList() {
     <DndProvider backend={HTML5Backend}>
       <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <h1 className="text-3xl font-bold">Sessions ({filteredSessions.length})</h1>
+        <h1 className="text-3xl font-bold">
+          Sessions ({filteredSessions.length}{totalSessions > allSessions.length ? ` of ${totalSessions}` : ''})
+        </h1>
         <div className="flex gap-2">
           <Button
             variant="outline"
@@ -252,81 +434,38 @@ export function SessionList() {
             {showBulkActions ? 'Cancel' : 'Bulk Actions'}
           </Button>
           <div className="relative">
-            <Button variant="outline" size="sm">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setShowColumnDropdown(!showColumnDropdown)}
+            >
               Columns ▼
             </Button>
-            <div className="absolute right-0 mt-1 bg-card border rounded-lg shadow-lg p-2 space-y-1 z-10">
-              {Object.entries(visibleColumns).map(([key, visible]) => (
-                <label key={key} className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={visible}
-                    onChange={() => toggleColumn(key as keyof ColumnConfig)}
-                  />
-                  {key.charAt(0).toUpperCase() + key.slice(1)}
-                </label>
-              ))}
-            </div>
+            {showColumnDropdown && (
+              <>
+                <div 
+                  className="fixed inset-0 z-10" 
+                  onClick={() => setShowColumnDropdown(false)}
+                />
+                <div className="absolute right-0 mt-1 bg-card border rounded-lg shadow-lg p-2 space-y-1 z-20">
+                  {Object.entries(visibleColumns).map(([key, visible]) => (
+                    <label key={key} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/50 p-1 rounded">
+                      <input
+                        type="checkbox"
+                        checked={visible}
+                        onChange={() => toggleColumn(key as keyof ColumnConfig)}
+                      />
+                      {key.charAt(0).toUpperCase() + key.slice(1)}
+                    </label>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
-        <Input
-          placeholder="Search sessions..."
-          value={urlState.search}
-          onChange={(e) => updateUrlState({ search: e.target.value })}
-        />
-        <select
-          value={urlState.sortBy}
-          onChange={(e) => updateUrlState({ sortBy: e.target.value as any })}
-          className="px-3 py-2 border border-input rounded-md bg-background"
-        >
-          <option value="created_at">Sort by Date</option>
-          <option value="score">Sort by Score</option>
-          <option value="title">Sort by Title</option>
-        </select>
-        <div className="flex gap-2">
-          <Input
-            type="number"
-            placeholder="Min Score"
-            value={urlState.scoreMin}
-            onChange={(e) => updateUrlState({ scoreMin: Number(e.target.value) })}
-            min={0}
-            max={10}
-          />
-          <Input
-            type="number"
-            placeholder="Max Score"
-            value={urlState.scoreMax}
-            onChange={(e) => updateUrlState({ scoreMax: Number(e.target.value) })}
-            min={0}
-            max={10}
-          />
-        </div>
-        <Input
-          type="date"
-          placeholder="From Date"
-          value={urlState.dateFrom}
-          onChange={(e) => updateUrlState({ dateFrom: e.target.value })}
-        />
-        <Input
-          type="date"
-          placeholder="To Date"
-          value={urlState.dateTo}
-          onChange={(e) => updateUrlState({ dateTo: e.target.value })}
-        />
-        <select
-          value={urlState.pageSize}
-          onChange={(e) => updateUrlState({ pageSize: Number(e.target.value) })}
-          className="px-3 py-2 border border-input rounded-md bg-background"
-        >
-          {PAGE_SIZES.map((size: number) => (
-            <option key={size} value={size}>{size} per page</option>
-          ))}
-        </select>
-      </div>
+
 
       {/* Bulk Actions */}
       {showBulkActions && (
@@ -361,10 +500,201 @@ export function SessionList() {
 
       {/* Virtualized List */}
       <div className="bg-card border rounded-lg">
+        {/* Sticky Header with Filters */}
+        <div className="sticky top-0 z-10 bg-card border-b">
+          {/* Column Headers */}
+          <div className="flex items-center gap-4 px-4 py-3 font-medium text-sm border-b">
+            {showBulkActions && <div className="w-6"></div>}
+            <div className="flex-1 min-w-0">
+              <button
+                onClick={() => updateUrlState({ 
+                  sortBy: 'title',
+                  sortOrder: urlState.sortBy === 'title' && urlState.sortOrder === 'asc' ? 'desc' : 'asc'
+                })}
+                className="flex items-center gap-1 hover:text-primary"
+              >
+                Title
+                {urlState.sortBy === 'title' && (
+                  <span>{urlState.sortOrder === 'asc' ? '↑' : '↓'}</span>
+                )}
+              </button>
+            </div>
+            <div className="text-center w-20">
+              <button
+                onClick={() => updateUrlState({ 
+                  sortBy: 'user_id',
+                  sortOrder: urlState.sortBy === 'user_id' && urlState.sortOrder === 'asc' ? 'desc' : 'asc'
+                })}
+                className="flex items-center gap-1 hover:text-primary"
+              >
+                User
+                {urlState.sortBy === 'user_id' && (
+                  <span>{urlState.sortOrder === 'asc' ? '↑' : '↓'}</span>
+                )}
+              </button>
+            </div>
+            <div className="text-center w-32">
+              <button
+                onClick={() => updateUrlState({ 
+                  sortBy: 'created_at',
+                  sortOrder: urlState.sortBy === 'created_at' && urlState.sortOrder === 'asc' ? 'desc' : 'asc'
+                })}
+                className="flex items-center gap-1 hover:text-primary"
+              >
+                Created At
+                {urlState.sortBy === 'created_at' && (
+                  <span>{urlState.sortOrder === 'asc' ? '↑' : '↓'}</span>
+                )}
+              </button>
+            </div>
+            {visibleColumns.score && (
+              <div className="text-center w-16">
+                <button
+                  onClick={() => updateUrlState({ 
+                    sortBy: 'score',
+                    sortOrder: urlState.sortBy === 'score' && urlState.sortOrder === 'asc' ? 'desc' : 'asc'
+                  })}
+                  className="flex items-center gap-1 hover:text-primary"
+                >
+                  Score
+                  {urlState.sortBy === 'score' && (
+                    <span>{urlState.sortOrder === 'asc' ? '↑' : '↓'}</span>
+                  )}
+                </button>
+              </div>
+            )}
+            {visibleColumns.confidence && <div className="text-center w-16">Confidence</div>}
+            {visibleColumns.clarity && <div className="text-center w-16">Clarity</div>}
+            {visibleColumns.listening && <div className="text-center w-16">Listening</div>}
+            {visibleColumns.duration && <div className="text-center w-20">Duration</div>}
+          </div>
+          
+          {/* Filter Row */}
+          <div className="flex items-center gap-4 px-4 py-2 bg-muted/30">
+            {showBulkActions && <div className="w-6"></div>}
+            <div className="flex-1 min-w-0">
+              <Input
+                placeholder="Search by title..."
+                value={localSearch}
+                onChange={(e) => {
+                  const value = e.target.value
+                  setLocalSearch(value)
+                  updateUrlState({ search: value })
+                }}
+                className="h-8 text-xs"
+              />
+            </div>
+            <div className="w-20">
+              <select
+                value={localTeam}
+                onChange={(e) => {
+                  const value = e.target.value
+                  setLocalTeam(value)
+                  updateUrlState({ team: value || undefined })
+                }}
+                className="h-8 px-2 text-xs border border-input rounded bg-background w-full"
+              >
+                <option value="">All Teams</option>
+                <option value="Sales">Sales</option>
+                <option value="Executive">Executive</option>
+                <option value="Engineering">Engineering</option>
+              </select>
+            </div>
+            <div className="w-32">
+              <div className="flex flex-col gap-1">
+                <Input
+                  type="date"
+                  value={localDateFrom}
+                  onChange={(e) => {
+                    setLocalDateFrom(e.target.value)
+                    updateUrlState({ dateFrom: e.target.value })
+                  }}
+                  className="h-6 text-xs w-full"
+                />
+                <Input
+                  type="date"
+                  value={localDateTo}
+                  onChange={(e) => {
+                    setLocalDateTo(e.target.value)
+                    updateUrlState({ dateTo: e.target.value })
+                  }}
+                  className="h-6 text-xs w-full"
+                />
+              </div>
+            </div>
+            {visibleColumns.score && (
+              <div className="w-16">
+                <div className="flex flex-col gap-1">
+                  <Input
+                    type="number"
+                    placeholder="Min"
+                    value={localScoreMin === SCORE_RANGES.MIN ? '' : localScoreMin}
+                    onChange={(e) => {
+                      const value = e.target.value ? Number(e.target.value) : SCORE_RANGES.MIN
+                      setLocalScoreMin(value)
+                    }}
+                    onBlur={(e) => {
+                      const value = e.target.value ? Number(e.target.value) : SCORE_RANGES.MIN
+                      updateUrlState({ scoreMin: value })
+                    }}
+                    min={0}
+                    max={10}
+                    className="h-6 text-xs w-full"
+                  />
+                  <Input
+                    type="number"
+                    placeholder="Max"
+                    value={localScoreMax === SCORE_RANGES.MAX ? '' : localScoreMax}
+                    onChange={(e) => {
+                      const value = e.target.value ? Number(e.target.value) : SCORE_RANGES.MAX
+                      setLocalScoreMax(value)
+                    }}
+                    onBlur={(e) => {
+                      const value = e.target.value ? Number(e.target.value) : SCORE_RANGES.MAX
+                      updateUrlState({ scoreMax: value })
+                    }}
+                    min={0}
+                    max={10}
+                    className="h-6 text-xs w-full"
+                  />
+                </div>
+              </div>
+            )}
+            {visibleColumns.confidence && <div className="w-16"></div>}
+            {visibleColumns.clarity && <div className="w-16"></div>}
+            {visibleColumns.listening && <div className="w-16"></div>}
+            {visibleColumns.duration && (
+              <div className="w-20">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setLocalSearch('')
+                    setLocalScoreMin(SCORE_RANGES.MIN)
+                    setLocalScoreMax(SCORE_RANGES.MAX)
+                    setLocalDateFrom('')
+                    setLocalDateTo('')
+                    setLocalTeam('')
+                    window.location.href = '/sessions'
+                  }}
+                  className="h-8 text-xs px-2 w-full"
+                >
+                  Clear
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+        
         <div
-          ref={(el) => (parentRef[0] = el)}
-          className="h-[600px] overflow-auto"
+          ref={parentRef}
+          className="h-[calc(100vh-200px)] overflow-auto relative"
         >
+          {filteredSessions.length === 0 && allSessions.length > 0 && (
+            <div className="absolute inset-0 flex items-center justify-center z-30">
+              <div className="text-muted-foreground text-lg bg-card px-4 py-2 rounded-lg shadow-lg">No sessions match your filters</div>
+            </div>
+          )}
           <div
             style={{
               height: `${virtualizer.getTotalSize()}px`,
@@ -372,10 +702,16 @@ export function SessionList() {
               position: 'relative',
             }}
           >
-            {virtualizer.getVirtualItems().map((virtualItem) => {
-              const session = filteredSessions[virtualItem.index]
-              return (
-                <SessionRow
+            {filteredSessions.length > 0 && (
+              virtualizer.getVirtualItems().map((virtualItem) => {
+                const session = filteredSessions[virtualItem.index]
+                if (!session) {
+                  console.log('Missing session at index:', virtualItem.index, 'Total filtered:', filteredSessions.length)
+                  return null
+                }
+                
+                return (
+                  <SessionRow
                   key={session.id}
                   session={session}
                   style={{
@@ -387,7 +723,11 @@ export function SessionList() {
                   }}
                   onClick={() => {
                     setSelectedSessionId(session.id)
-                    updateUrlState({ sessionId: session.id })
+                    setSearchParams(prev => {
+                      const newParams = new URLSearchParams(prev)
+                      newParams.set('sessionId', session.id)
+                      return newParams
+                    })
                   }}
                   onHover={() => prefetchSession(session.id)}
                   isSelected={selectedSessions.has(session.id)}
@@ -406,7 +746,13 @@ export function SessionList() {
                   visibleColumns={visibleColumns}
                 />
               )
-            })}
+            })
+            )}
+            {isFetchingNextPage && (
+              <div className="absolute bottom-0 left-0 right-0 flex justify-center p-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -416,7 +762,11 @@ export function SessionList() {
         isOpen={!!selectedSessionId}
         onClose={() => {
           setSelectedSessionId(null)
-          updateUrlState({ sessionId: '' })
+          setSearchParams(prev => {
+            const newParams = new URLSearchParams(prev)
+            newParams.delete('sessionId')
+            return newParams
+          })
         }}
       />
     </div>

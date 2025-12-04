@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { DndProvider } from 'react-dnd'
+import { DndProvider, useDrag, useDrop } from 'react-dnd'
 import { HTML5Backend } from 'react-dnd-html5-backend'
+import { useSearchParams } from 'react-router-dom'
 import { apiService } from '@/services/api'
 import { TeamPerformanceChart } from '@/components/charts/TeamPerformanceChart'
 import { Input } from '@/components/ui/Input'
@@ -15,12 +16,33 @@ interface UserRowProps {
   user: User
   index: number
   onClick: () => void
+  moveUser: (dragIndex: number, hoverIndex: number) => void
 }
 
-function UserRow({ user, onClick }: UserRowProps) {
+function UserRow({ user, index, onClick, moveUser }: UserRowProps) {
+  const [{ isDragging }, drag] = useDrag({
+    type: 'user',
+    item: { index },
+    collect: (monitor) => ({
+      isDragging: monitor.isDragging(),
+    }),
+  })
+
+  const [, drop] = useDrop({
+    accept: 'user',
+    hover: (item: { index: number }) => {
+      if (item.index !== index) {
+        moveUser(item.index, index)
+        item.index = index
+      }
+    },
+  })
   return (
     <tr 
-      className="hover:bg-muted/50 cursor-pointer transition-colors"
+      ref={(node) => drag(drop(node))}
+      className={`hover:bg-muted/50 cursor-pointer transition-colors ${
+        isDragging ? 'opacity-50' : ''
+      }`}
       onClick={onClick}
     >
       <td className="px-4 py-3 font-medium">{user.first_name}</td>
@@ -108,18 +130,34 @@ function UserModal({ user, isOpen, onClose }: { user: User | null, isOpen: boole
 }
 
 export function TeamOverview() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [filterState, updateFilterState] = useLocalState({
     search: '',
     team: undefined as string | undefined,
   })
-  
-  const [selectedUserId, setSelectedUserId] = useState('')
+  const [users, setUsers] = useState<User[]>([])
 
-  const { data: users = [], isLoading: usersLoading, error } = useQuery({
+  const { data: apiUsers = [], isLoading: usersLoading, error } = useQuery({
     queryKey: ['users'],
     queryFn: apiService.getUsers,
   })
+
+  // Update local users when API data changes
+  useEffect(() => {
+    setUsers(apiUsers)
+  }, [apiUsers])
+
+  // Handle URL-based modal opening
+  useEffect(() => {
+    const userId = searchParams.get('user')
+    if (userId && users.length > 0) {
+      const user = users.find(u => u.id === userId)
+      if (user) {
+        setSelectedUser(user)
+      }
+    }
+  }, [searchParams, users])
 
   const { data: teamMetrics = [] } = useQuery({
     queryKey: ['teamMetrics'],
@@ -149,11 +187,31 @@ export function TeamOverview() {
 
   const handleUserClick = (user: User) => {
     setSelectedUser(user)
+    setSearchParams(prev => {
+      const newParams = new URLSearchParams(prev)
+      newParams.set('user', user.id)
+      return newParams
+    })
   }
 
   const handleCloseModal = () => {
     setSelectedUser(null)
+    setSearchParams(prev => {
+      const newParams = new URLSearchParams(prev)
+      newParams.delete('user')
+      return newParams
+    })
   }
+
+  const moveUser = useCallback((dragIndex: number, hoverIndex: number) => {
+    setUsers(prev => {
+      const newUsers = [...prev]
+      const draggedUser = newUsers[dragIndex]
+      newUsers.splice(dragIndex, 1)
+      newUsers.splice(hoverIndex, 0, draggedUser)
+      return newUsers
+    })
+  }, [])
 
   if (usersLoading) {
     return (
@@ -171,6 +229,14 @@ export function TeamOverview() {
     )
   }
 
+  if (users.length === 0 && !usersLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-muted-foreground">No users found</div>
+      </div>
+    )
+  }
+
   return (
     <DndProvider backend={HTML5Backend}>
       <div className="space-y-8">
@@ -178,38 +244,18 @@ export function TeamOverview() {
           <h1 className="text-3xl font-bold">Team Overview</h1>
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-4">
-          <Input
-            placeholder="Search users..."
-            value={filterState.search}
-            onChange={(e) => updateFilterState({ search: e.target.value })}
-            className="sm:max-w-xs"
-          />
-          <select
-            value={filterState.team || ''}
-            onChange={(e) => updateFilterState({ team: e.target.value || undefined })}
-            className="px-3 py-2 border border-input rounded-md bg-background"
-          >
-            <option value="">All Teams</option>
-            <option value="Sales">Sales</option>
-            <option value="Executive">Executive</option>
-            <option value="Engineering">Engineering</option>
-          </select>
-        </div>
-
         {/* Charts and Stats */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="space-y-4">
+          <div className="flex flex-col space-y-4">
             <h2 className="text-xl font-semibold">Team Performance</h2>
-            <div className="bg-card rounded-lg p-6 border">
+            <div className="bg-card rounded-lg p-6 border h-full">
               <TeamPerformanceChart data={teamMetrics} />
             </div>
           </div>
 
-          <div className="space-y-4">
+          <div className="flex flex-col space-y-4">
             <h2 className="text-xl font-semibold">Top Performers</h2>
-            <div className="bg-card rounded-lg p-6 border space-y-4">
+            <div className="bg-card rounded-lg p-6 border space-y-4 h-full">
               {topPerformers.map((user, index) => (
                 <div key={user.id} className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -239,6 +285,26 @@ export function TeamOverview() {
           </div>
         </div>
 
+        {/* Filters */}
+        <div className="flex flex-col sm:flex-row gap-4">
+          <Input
+            placeholder="Search users..."
+            value={filterState.search}
+            onChange={(e) => updateFilterState({ search: e.target.value })}
+            className="sm:max-w-xs"
+          />
+          <select
+            value={filterState.team || ''}
+            onChange={(e) => updateFilterState({ team: e.target.value || undefined })}
+            className="px-3 py-2 border border-input rounded-md bg-background"
+          >
+            <option value="">All Teams</option>
+            <option value="Sales">Sales</option>
+            <option value="Executive">Executive</option>
+            <option value="Engineering">Engineering</option>
+          </select>
+        </div>
+
         {/* Users Table */}
         <div className="bg-card rounded-lg border">
           <div className="p-6 border-b">
@@ -246,9 +312,9 @@ export function TeamOverview() {
               All Users ({filteredUsers.length})
             </h2>
           </div>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto max-h-96 overflow-y-auto">
             <table className="w-full">
-              <thead className="bg-muted/50">
+              <thead className="bg-card sticky top-0 z-10 border-b">
                 <tr>
                   <th className="px-4 py-3 text-left font-medium">Name</th>
                   <th className="px-4 py-3 text-left font-medium">Team</th>
@@ -264,6 +330,7 @@ export function TeamOverview() {
                     user={user}
                     index={index}
                     onClick={() => handleUserClick(user)}
+                    moveUser={moveUser}
                   />
                 ))}
               </tbody>

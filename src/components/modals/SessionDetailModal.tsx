@@ -71,7 +71,10 @@ export function SessionDetailModal({ sessionId, isOpen, onClose }: SessionDetail
 
   const updateMutation = useMutation({
     mutationFn: (newFeedback: string) => 
-      sessionId ? apiService.updateSession(sessionId, newFeedback) : Promise.reject(),
+      sessionId ? apiService.bulkUpdateSessions({
+        session_ids: [sessionId],
+        feedback: newFeedback,
+      }) : Promise.reject(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sessionDetail', sessionId] })
       setIsEditing(false)

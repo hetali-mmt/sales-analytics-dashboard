@@ -1,14 +1,11 @@
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState } from 'react'
-import { TeamOverview } from '@/pages/TeamOverview'
-import { SessionList } from '@/pages/SessionList'
-import { Dashboard } from '@/pages/Dashboard'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
 import { Toaster } from 'sonner'
-
 import { API_CONFIG } from '@/lib/constants'
+import { routes } from '@/lib/routes'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -21,6 +18,7 @@ const queryClient = new QueryClient({
 
 function Navigation() {
   const { isConnected } = useWebSocket()
+  const location = useLocation()
   
   return (
     <nav className="bg-card border-b">
@@ -31,24 +29,19 @@ function Navigation() {
               Analytics Dashboard
             </Link>
             <div className="flex space-x-4">
-              <Link
-                to="/"
-                className="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium transition-colors"
-              >
-                Team Overview
-              </Link>
-              <Link
-                to="/sessions"
-                className="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium transition-colors"
-              >
-                Sessions
-              </Link>
-              <Link
-                to="/dashboard"
-                className="text-muted-foreground hover:text-foreground px-3 py-2 rounded-md text-sm font-medium transition-colors"
-              >
-                Dashboard
-              </Link>
+              {routes.map((route) => (
+                <Link
+                  key={route.path}
+                  to={route.path}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    location.pathname === route.path
+                      ? 'text-foreground bg-muted'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {route.label}
+                </Link>
+              ))}
             </div>
           </div>
           <div className="flex items-center space-x-4">
@@ -103,9 +96,16 @@ function App() {
             <Navigation />
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
               <Routes>
-                <Route path="/" element={<TeamOverview />} />
-                <Route path="/sessions" element={<SessionList />} />
-                <Route path="/dashboard" element={<Dashboard />} />
+                {routes.map((route) => {
+                  const Component = route.component
+                  return (
+                    <Route
+                      key={route.path}
+                      path={route.path}
+                      element={<Component />}
+                    />
+                  )
+                })}
               </Routes>
             </main>
             <Toaster />
