@@ -8,9 +8,12 @@
     "build": "tsc && vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "test": "vitest",
+    "test": "vitest --run",
+    "test:watch": "vitest --watch",
     "test:ui": "vitest --ui",
-    "test:e2e": "playwright test"
+    "test:quick": "npm run type-check && npm run test",
+    "test:comprehensive": "npm run type-check && npm run test && npm run build && npx playwright test --project=chromium tests/e2e/navigation.spec.ts",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.3.2",

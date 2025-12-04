@@ -22,7 +22,8 @@ export function useTeamExport() {
     
     try {
       // Dynamic imports
-      const { jsPDF } = await import('jspdf')
+      const jsPDFModule = await import('jspdf')
+      const jsPDF = jsPDFModule.default
       const autoTable = (await import('jspdf-autotable')).default
       const html2canvas = (await import('html2canvas')).default
       
@@ -123,7 +124,7 @@ export function useTeamExport() {
           doc.addImage(imgData, 'PNG', 20, yPosition, imgWidth, imgHeight)
           yPosition += imgHeight + 20
         } catch (error) {
-          console.log('Chart capture failed:', error)
+
           yPosition += 10
         }
       }
@@ -207,7 +208,7 @@ export function useTeamExport() {
       setExportProgress(prev => ({ ...prev, progress: 90 }))
       
       // Footer
-      const pageCount = doc.getNumberOfPages()
+      const pageCount = (doc as any).internal.getNumberOfPages()
       for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i)
         doc.setFontSize(8)

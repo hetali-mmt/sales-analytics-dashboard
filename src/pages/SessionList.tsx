@@ -158,15 +158,15 @@ export function SessionList() {
   const [urlState, updateUrlState] = useUrlState({
     pageSize: PAGINATION.DEFAULT_PAGE_SIZE,
     search: '',
-    sortBy: 'created_at' as const,
-    sortOrder: 'desc' as const,
-    scoreMin: SCORE_RANGES.MIN,
-    scoreMax: SCORE_RANGES.MAX,
+    sortBy: 'created_at' as 'score' | 'created_at' | 'title',
+    sortOrder: 'desc' as 'asc' | 'desc',
+    scoreMin: SCORE_RANGES.MIN as number,
+    scoreMax: SCORE_RANGES.MAX as number,
     dateFrom: '',
     dateTo: '',
     team: undefined as 'Sales' | 'Executive' | 'Engineering' | undefined,
     sessionId: '',
-  }, 500, true)
+  }, 300, true)
 
   const { isConnected, lastMessage } = useWebSocket()
   const { exportProgress, exportToCSV, exportToPDF } = useExport()
@@ -213,7 +213,7 @@ export function SessionList() {
 
   // Update local sessions when API data changes
   useEffect(() => {
-    console.log('API Sessions received:', allSessions.length, allSessions)
+
     setSessions(allSessions)
   }, [allSessions])
 
@@ -245,14 +245,14 @@ export function SessionList() {
         // Show toast notification
         setToastMessage('New session created!')
         setShowToast(true)
-        console.log('New session created:', lastMessage.data)
+
       } else if (lastMessage.type === 'session_updated') {
         // Invalidate sessions to refresh data
         queryClient.invalidateQueries({ queryKey: ['sessions'] })
         
         setToastMessage('Session updated!')
         setShowToast(true)
-        console.log('Session updated:', lastMessage.data)
+
       }
     }
   }, [lastMessage, queryClient])
@@ -266,14 +266,7 @@ export function SessionList() {
   }, [queryClient])
 
   const filteredSessions = useMemo(() => {
-    console.log('Filtering sessions:', sessions.length, 'with filters:', {
-      search: urlState.search,
-      scoreMin: urlState.scoreMin,
-      scoreMax: urlState.scoreMax,
-      dateFrom: urlState.dateFrom,
-      dateTo: urlState.dateTo,
-      team: urlState.team
-    })
+
     
     if (sessions.length === 0) return []
     
@@ -285,7 +278,7 @@ export function SessionList() {
       filtered = filtered.filter(session => 
         session.title.toLowerCase().includes(searchTerm)
       )
-      console.log('After search filter:', filtered.length)
+
     }
     
     // Score range filter
@@ -293,7 +286,7 @@ export function SessionList() {
       filtered = filtered.filter(session => 
         session.score >= urlState.scoreMin && session.score <= urlState.scoreMax
       )
-      console.log('After score filter:', filtered.length)
+
     }
     
     // Date filters
@@ -301,7 +294,7 @@ export function SessionList() {
       filtered = filtered.filter(session => 
         new Date(session.created_at) >= new Date(urlState.dateFrom)
       )
-      console.log('After dateFrom filter:', filtered.length)
+
     }
     
     if (urlState.dateTo) {
@@ -310,13 +303,13 @@ export function SessionList() {
       filtered = filtered.filter(session => 
         new Date(session.created_at) <= endDate
       )
-      console.log('After dateTo filter:', filtered.length)
+
     }
     
     // Team filter
     if (urlState.team) {
       // Note: sessions don't have team field, this might need user lookup
-      console.log('Team filter applied but sessions may not have team field')
+
     }
     
     // Apply sorting
@@ -332,10 +325,7 @@ export function SessionList() {
           aVal = a.title.toLowerCase()
           bVal = b.title.toLowerCase()
           break
-        case 'user_id':
-          aVal = a.user_id
-          bVal = b.user_id
-          break
+
         case 'created_at':
         default:
           aVal = new Date(a.created_at)
@@ -350,7 +340,7 @@ export function SessionList() {
       }
     })
     
-    console.log('Final filtered sessions:', filtered.length)
+
     return filtered
   }, [sessions, urlState.search, urlState.scoreMin, urlState.scoreMax, urlState.dateFrom, urlState.dateTo, urlState.team, urlState.sortBy, urlState.sortOrder])
 
@@ -601,18 +591,7 @@ export function SessionList() {
               </button>
             </div>
             <div className="text-center w-20">
-              <button
-                onClick={() => updateUrlState({ 
-                  sortBy: 'user_id',
-                  sortOrder: urlState.sortBy === 'user_id' && urlState.sortOrder === 'asc' ? 'desc' : 'asc'
-                })}
-                className="flex items-center gap-1 hover:text-primary"
-              >
-                User
-                {urlState.sortBy === 'user_id' && (
-                  <span>{urlState.sortOrder === 'asc' ? '↑' : '↓'}</span>
-                )}
-              </button>
+              <span className="text-sm font-medium">User</span>
             </div>
             <div className="text-center w-32">
               <button
@@ -671,7 +650,7 @@ export function SessionList() {
                 onChange={(e) => {
                   const value = e.target.value
                   setLocalTeam(value)
-                  updateUrlState({ team: value || undefined })
+                  updateUrlState({ team: (value as 'Sales' | 'Executive' | 'Engineering') || undefined })
                 }}
                 className="h-8 px-2 text-xs border border-input rounded bg-background w-full"
               >
@@ -780,7 +759,7 @@ export function SessionList() {
               virtualizer.getVirtualItems().map((virtualItem) => {
                 const session = filteredSessions[virtualItem.index]
                 if (!session) {
-                  console.log('Missing session at index:', virtualItem.index, 'Total filtered:', filteredSessions.length)
+
                   return null
                 }
                 

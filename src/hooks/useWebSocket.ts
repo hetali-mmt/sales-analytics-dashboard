@@ -22,12 +22,12 @@ export function useWebSocket() {
 
     try {
       setConnectionStatus('connecting')
-      console.log('🔌 Connecting to WebSocket:', endpoints.websocket)
+
       
       ws.current = new WebSocket(endpoints.websocket)
       
       ws.current.onopen = () => {
-        console.log('✅ WebSocket connected')
+
         setIsConnected(true)
         setConnectionStatus('connected')
         reconnectAttempts.current = 0
@@ -36,18 +36,18 @@ export function useWebSocket() {
       ws.current.onmessage = (event) => {
         try {
           const message: WebSocketMessage = JSON.parse(event.data)
-          console.log('📨 WebSocket message:', message)
+
           setLastMessage(message)
         } catch (error) {
-          console.log('⚠️ Invalid WebSocket message format')
+
         }
       }
 
       ws.current.onclose = (event) => {
-        console.log('🔌 WebSocket closed:', event.code, event.reason || 'No reason provided')
+
         
         if (event.code === 1006) {
-          console.log('❌ Server rejected WebSocket connection (endpoint may not exist)')
+
           setConnectionStatus('error')
           return
         }
@@ -57,7 +57,7 @@ export function useWebSocket() {
         // Only reconnect on unexpected closures (not manual close or server rejection)
         if (event.code !== 1000 && event.code !== 1006 && reconnectAttempts.current < maxReconnectAttempts) {
           const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000)
-          console.log(`🔄 Reconnecting in ${delay}ms (${reconnectAttempts.current + 1}/${maxReconnectAttempts})`)
+
           
           setTimeout(() => {
             reconnectAttempts.current++
@@ -67,7 +67,7 @@ export function useWebSocket() {
       }
 
       ws.current.onerror = () => {
-        console.log('❌ WebSocket connection failed')
+
         setIsConnected(false)
         setConnectionStatus('error')
       }

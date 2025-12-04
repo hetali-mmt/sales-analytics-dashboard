@@ -28,9 +28,9 @@ export function useExport() {
           session.id,
           `"${session.title.replace(/"/g, '""')}"`,
           session.score,
-          session.team || '',
+          '', // team field not available in session
           new Date(session.created_at).toISOString(),
-          `"${(session.feedback || '').replace(/"/g, '""')}"`
+          `""` // feedback field not available in session
         ].join(','))
       ].join('\n')
       
@@ -60,7 +60,8 @@ export function useExport() {
     
     try {
       // Dynamic import for PDF generation
-      const { jsPDF } = await import('jspdf')
+      const jsPDFModule = await import('jspdf')
+      const jsPDF = jsPDFModule.default
       const autoTable = (await import('jspdf-autotable')).default
       
       setExportProgress(prev => ({ ...prev, progress: 10 }))
@@ -219,7 +220,7 @@ export function useExport() {
       setExportProgress(prev => ({ ...prev, progress: 85 }))
       
       // Footer
-      const pageCount = doc.getNumberOfPages()
+      const pageCount = (doc as any).internal.getNumberOfPages()
       for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i)
         doc.setFontSize(8)
