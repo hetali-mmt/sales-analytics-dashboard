@@ -63,10 +63,11 @@ export function SessionDetailModal({ sessionId, isOpen, onClose }: SessionDetail
   const [isEditing, setIsEditing] = useState(false)
   const queryClient = useQueryClient()
 
-  const { data: sessionDetail, isLoading } = useQuery({
+  const { data: sessionDetail, isLoading, error } = useQuery({
     queryKey: ['sessionDetail', sessionId],
     queryFn: () => sessionId ? apiService.getSessionDetail(sessionId) : null,
     enabled: !!sessionId && isOpen,
+    retry: false, // Don't retry on 404
   })
 
   const updateMutation = useMutation({
@@ -125,12 +126,17 @@ export function SessionDetailModal({ sessionId, isOpen, onClose }: SessionDetail
     )
   }
 
-  if (!sessionDetail) {
+  if (error || !sessionDetail) {
     return (
       <Modal isOpen={isOpen} onClose={handleClose} title="Session Details">
         <div className="text-center py-8">
-          <p className="text-muted-foreground">Session not found</p>
-          <Button onClick={handleClose} className="mt-4">Close</Button>
+          <p className="text-muted-foreground mb-2">
+            {error ? 'Session details are not available' : 'Session not found'}
+          </p>
+          <p className="text-sm text-muted-foreground mb-4">
+            The session detail endpoint is currently unavailable.
+          </p>
+          <Button onClick={handleClose}>Close</Button>
         </div>
       </Modal>
     )

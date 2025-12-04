@@ -8,10 +8,13 @@ import { apiService } from '@/services/api'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { SessionDetailModal } from '@/components/modals/SessionDetailModal'
+import { Toast } from '@/components/ui/Toast'
 import { Session } from '@/schemas'
 import { formatDuration, formatScore, getScoreColor } from '@/lib/utils'
 import { useUrlState } from '@/hooks/useUrlState'
 import { useWebSocket } from '@/hooks/useWebSocket'
+import { useExport } from '@/hooks/useExport'
+import { ProgressBar } from '@/components/ui/ProgressBar'
 import { PAGINATION, SCORE_RANGES, VIRTUALIZATION, PAGE_SIZES } from '@/lib/constants'
 import { format, parseISO } from 'date-fns'
 
@@ -85,7 +88,7 @@ function SessionRow({ session, style, onClick, onHover, isSelected, onSelect, sh
       </div>
       <div className="text-center w-32">
         <p className="text-xs text-muted-foreground">
-          {format(parseISO(session.created_at), 'MMM dd, HH:mm')}
+          {format(parseISO(session.created_at), 'MMM dd, yyyy HH:mm')}
         </p>
       </div>
       {visibleColumns.score && (
@@ -147,6 +150,8 @@ export function SessionList() {
   const [localDateFrom, setLocalDateFrom] = useState('')
   const [localDateTo, setLocalDateTo] = useState('')
   const [localTeam, setLocalTeam] = useState<string>('')
+  const [showToast, setShowToast] = useState(false)
+  const [toastMessage, setToastMessage] = useState('')
   
   const queryClient = useQueryClient()
   
@@ -163,7 +168,8 @@ export function SessionList() {
     sessionId: '',
   }, 500, true)
 
-  useWebSocket()
+  const { isConnected, lastMessage } = useWebSocket()
+  const { exportProgress, exportToCSV, exportToPDF } = useExport()
 
   const {
     data: sessionsData,
@@ -228,6 +234,28 @@ export function SessionList() {
       setSelectedSessionId(sessionId)
     }
   }, [searchParams, selectedSessionId])
+
+  // Handle real-time WebSocket updates
+  useEffect(() => {
+    if (lastMessage) {
+      if (lastMessage.type === 'session_created') {
+        // Invalidate and refetch sessions to get new data
+        queryClient.invalidateQueries({ queryKey: ['sessions'] })
+        
+        // Show toast notification
+        setToastMessage('New session created!')
+        setShowToast(true)
+        console.log('New session created:', lastMessage.data)
+      } else if (lastMessage.type === 'session_updated') {
+        // Invalidate sessions to refresh data
+        queryClient.invalidateQueries({ queryKey: ['sessions'] })
+        
+        setToastMessage('Session updated!')
+        setShowToast(true)
+        console.log('Session updated:', lastMessage.data)
+      }
+    }
+  }, [lastMessage, queryClient])
 
   // Prefetch session details on hover
   const prefetchSession = useCallback((sessionId: string) => {
@@ -423,10 +451,34 @@ export function SessionList() {
     <DndProvider backend={HTML5Backend}>
       <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <h1 className="text-3xl font-bold">
-          Sessions ({filteredSessions.length}{totalSessions > allSessions.length ? ` of ${totalSessions}` : ''})
-        </h1>
+        <div className="flex items-center gap-4">
+          <h1 className="text-3xl font-bold">
+            Sessions ({filteredSessions.length}{totalSessions > allSessions.length ? ` of ${totalSessions}` : ''})
+          </h1>
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${
+              isConnected ? 'bg-green-500' : 'bg-red-500'
+            }`}></div>
+            <span className="text-sm text-muted-foreground">
+              {isConnected ? 'Live' : 'Disconnected'}
+            </span>
+          </div>
+        </div>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => exportToCSV(filteredSessions, 'sessions-export')}
+            disabled={exportProgress.isExporting}
+          >
+            {exportProgress.isExporting && exportProgress.type === 'csv' ? 'Exporting...' : 'Export CSV'}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => exportToPDF(filteredSessions, undefined, 'sessions-report')}
+            disabled={exportProgress.isExporting}
+          >
+            {exportProgress.isExporting && exportProgress.type === 'pdf' ? 'Generating...' : 'Export PDF'}
+          </Button>
           <Button
             variant="outline"
             onClick={() => setShowBulkActions(!showBulkActions)}
@@ -467,6 +519,16 @@ export function SessionList() {
 
 
 
+      {/* Export Progress */}
+      {exportProgress.isExporting && (
+        <div className="bg-card border rounded-lg p-4">
+          <ProgressBar 
+            progress={exportProgress.progress}
+            label={`${exportProgress.type === 'csv' ? 'Exporting CSV' : 'Generating PDF'}...`}
+          />
+        </div>
+      )}
+
       {/* Bulk Actions */}
       {showBulkActions && (
         <div className="bg-card border rounded-lg p-4 space-y-4">
@@ -497,6 +559,25 @@ export function SessionList() {
           )}
         </div>
       )}
+
+      {/* Clear Filters Button */}
+      <div className="flex justify-end">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setLocalSearch('')
+            setLocalScoreMin(SCORE_RANGES.MIN)
+            setLocalScoreMax(SCORE_RANGES.MAX)
+            setLocalDateFrom('')
+            setLocalDateTo('')
+            setLocalTeam('')
+            window.location.href = '/sessions'
+          }}
+        >
+          Clear All Filters
+        </Button>
+      </div>
 
       {/* Virtualized List */}
       <div className="bg-card border rounded-lg">
@@ -637,6 +718,12 @@ export function SessionList() {
                       const value = e.target.value ? Number(e.target.value) : SCORE_RANGES.MIN
                       updateUrlState({ scoreMin: value })
                     }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const value = e.currentTarget.value ? Number(e.currentTarget.value) : SCORE_RANGES.MIN
+                        updateUrlState({ scoreMin: value })
+                      }
+                    }}
                     min={0}
                     max={10}
                     className="h-6 text-xs w-full"
@@ -653,6 +740,12 @@ export function SessionList() {
                       const value = e.target.value ? Number(e.target.value) : SCORE_RANGES.MAX
                       updateUrlState({ scoreMax: value })
                     }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const value = e.currentTarget.value ? Number(e.currentTarget.value) : SCORE_RANGES.MAX
+                        updateUrlState({ scoreMax: value })
+                      }
+                    }}
                     min={0}
                     max={10}
                     className="h-6 text-xs w-full"
@@ -663,26 +756,7 @@ export function SessionList() {
             {visibleColumns.confidence && <div className="w-16"></div>}
             {visibleColumns.clarity && <div className="w-16"></div>}
             {visibleColumns.listening && <div className="w-16"></div>}
-            {visibleColumns.duration && (
-              <div className="w-20">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setLocalSearch('')
-                    setLocalScoreMin(SCORE_RANGES.MIN)
-                    setLocalScoreMax(SCORE_RANGES.MAX)
-                    setLocalDateFrom('')
-                    setLocalDateTo('')
-                    setLocalTeam('')
-                    window.location.href = '/sessions'
-                  }}
-                  className="h-8 text-xs px-2 w-full"
-                >
-                  Clear
-                </Button>
-              </div>
-            )}
+            {visibleColumns.duration && <div className="w-20"></div>}
           </div>
         </div>
         
@@ -769,6 +843,14 @@ export function SessionList() {
           })
         }}
       />
+      
+      {showToast && (
+        <Toast
+          message={toastMessage}
+          type="success"
+          onClose={() => setShowToast(false)}
+        />
+      )}
     </div>
     </DndProvider>
   )

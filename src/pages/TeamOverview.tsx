@@ -11,6 +11,9 @@ import { Modal } from '@/components/ui/Modal'
 import { User } from '@/schemas'
 import { formatScore, getScoreColor, getTrendIcon } from '@/lib/utils'
 import { useLocalState } from '@/hooks/useLocalState'
+import { useTeamExport } from '@/hooks/useTeamExport'
+import { ProgressBar } from '@/components/ui/ProgressBar'
+import { Button } from '@/components/ui/Button'
 
 interface UserRowProps {
   user: User
@@ -137,6 +140,7 @@ export function TeamOverview() {
     team: undefined as string | undefined,
   })
   const [users, setUsers] = useState<User[]>([])
+  const { exportProgress, exportTeamReport } = useTeamExport()
 
   const { data: apiUsers = [], isLoading: usersLoading, error } = useQuery({
     queryKey: ['users'],
@@ -163,6 +167,8 @@ export function TeamOverview() {
     queryKey: ['teamMetrics'],
     queryFn: apiService.getTeamMetrics,
   })
+
+
 
   useQuery({
     queryKey: ['userPerformance'],
@@ -242,13 +248,30 @@ export function TeamOverview() {
       <div className="space-y-8">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <h1 className="text-3xl font-bold">Team Overview</h1>
+          <Button
+            onClick={() => exportTeamReport(users, teamMetrics, undefined, 'team-performance-report')}
+            disabled={exportProgress.isExporting}
+            variant="outline"
+          >
+            {exportProgress.isExporting ? 'Generating...' : 'Export PDF Report'}
+          </Button>
         </div>
+
+        {/* Export Progress */}
+        {exportProgress.isExporting && (
+          <div className="bg-card border rounded-lg p-4">
+            <ProgressBar 
+              progress={exportProgress.progress}
+              label="Generating PDF report with charts..."
+            />
+          </div>
+        )}
 
         {/* Charts and Stats */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <div className="flex flex-col space-y-4">
             <h2 className="text-xl font-semibold">Team Performance</h2>
-            <div className="bg-card rounded-lg p-6 border h-full">
+            <div className="bg-card rounded-lg p-6 border h-full" data-chart="team-performance">
               <TeamPerformanceChart data={teamMetrics} />
             </div>
           </div>
