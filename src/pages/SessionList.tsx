@@ -62,7 +62,7 @@ function SessionRow({ session, style, onClick, onHover, isSelected, onSelect, sh
     <div
       ref={(node) => drag(drop(node))}
       style={{ ...style, opacity: isDragging ? 0.5 : 1 }}
-      className={`flex items-center gap-4 px-4 py-3 border-b hover:bg-muted/50 cursor-pointer transition-colors ${
+      className={`flex items-center gap-2 lg:gap-4 px-2 lg:px-4 py-3 border-b hover:bg-muted/50 cursor-pointer transition-colors ${
         isSelected ? 'bg-primary/10' : ''
       }`}
       onClick={onClick}
@@ -81,41 +81,41 @@ function SessionRow({ session, style, onClick, onHover, isSelected, onSelect, sh
         />
       )}
       <div className="flex-1 min-w-0">
-        <p className="font-medium truncate">{session.title}</p>
+        <p className="font-medium truncate text-sm lg:text-base">{session.title}</p>
       </div>
-      <div className="text-center w-20">
-        <p className="text-sm font-mono">{session.user_id.slice(-6)}</p>
+      <div className="text-center w-16 lg:w-20">
+        <p className="text-xs lg:text-sm font-mono">{session.user_id.slice(-6)}</p>
       </div>
-      <div className="text-center w-32">
+      <div className="text-center w-24 lg:w-32">
         <p className="text-xs text-muted-foreground">
-          {format(parseISO(session.created_at), 'MMM dd, yyyy HH:mm')}
+          {format(parseISO(session.created_at), window.innerWidth < 768 ? 'MMM dd' : 'MMM dd, yyyy HH:mm')}
         </p>
       </div>
       {visibleColumns.score && (
-        <div className="text-center w-16">
-          <p className={`font-bold ${getScoreColor(session.score)}`}>
+        <div className="text-center w-12 lg:w-16">
+          <p className={`font-bold text-sm lg:text-base ${getScoreColor(session.score)}`}>
             {formatScore(session.score)}
           </p>
         </div>
       )}
       {visibleColumns.confidence && (
-        <div className="text-center w-16">
-          <p className="text-sm">{session.metrics.confidence}</p>
+        <div className="text-center w-12 lg:w-16">
+          <p className="text-xs lg:text-sm">{session.metrics.confidence}</p>
         </div>
       )}
       {visibleColumns.clarity && (
-        <div className="text-center w-16">
-          <p className="text-sm">{session.metrics.clarity}</p>
+        <div className="text-center w-12 lg:w-16">
+          <p className="text-xs lg:text-sm">{session.metrics.clarity}</p>
         </div>
       )}
       {visibleColumns.listening && (
-        <div className="text-center w-16">
-          <p className="text-sm">{session.metrics.listening}</p>
+        <div className="text-center w-12 lg:w-16">
+          <p className="text-xs lg:text-sm">{session.metrics.listening}</p>
         </div>
       )}
       {visibleColumns.duration && (
-        <div className="text-center w-20">
-          <p className="text-sm text-muted-foreground">
+        <div className="text-center w-16 lg:w-20">
+          <p className="text-xs lg:text-sm text-muted-foreground">
             {formatDuration(session.duration)}
           </p>
         </div>
@@ -454,55 +454,64 @@ export function SessionList() {
             </span>
           </div>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => exportToCSV(filteredSessions, 'sessions-export')}
-            disabled={exportProgress.isExporting}
-          >
-            {exportProgress.isExporting && exportProgress.type === 'csv' ? 'Exporting...' : 'Export CSV'}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => exportToPDF(filteredSessions, undefined, 'sessions-report')}
-            disabled={exportProgress.isExporting}
-          >
-            {exportProgress.isExporting && exportProgress.type === 'pdf' ? 'Generating...' : 'Export PDF'}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => setShowBulkActions(!showBulkActions)}
-          >
-            {showBulkActions ? 'Cancel' : 'Bulk Actions'}
-          </Button>
-          <div className="relative">
-            <Button 
-              variant="outline" 
+        <div className="flex flex-col sm:flex-row gap-2">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
               size="sm"
-              onClick={() => setShowColumnDropdown(!showColumnDropdown)}
+              onClick={() => exportToCSV(filteredSessions, 'sessions-export')}
+              disabled={exportProgress.isExporting}
+              className="text-xs lg:text-sm"
             >
-              Columns ▼
+              {exportProgress.isExporting && exportProgress.type === 'csv' ? 'Exporting...' : 'Export CSV'}
             </Button>
-            {showColumnDropdown && (
-              <>
-                <div 
-                  className="fixed inset-0 z-10" 
-                  onClick={() => setShowColumnDropdown(false)}
-                />
-                <div className="absolute right-0 mt-1 bg-card border rounded-lg shadow-lg p-2 space-y-1 z-20">
-                  {Object.entries(visibleColumns).map(([key, visible]) => (
-                    <label key={key} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/50 p-1 rounded">
-                      <input
-                        type="checkbox"
-                        checked={visible}
-                        onChange={() => toggleColumn(key as keyof ColumnConfig)}
-                      />
-                      {key.charAt(0).toUpperCase() + key.slice(1)}
-                    </label>
-                  ))}
-                </div>
-              </>
-            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => exportToPDF(filteredSessions, undefined, 'sessions-report')}
+              disabled={exportProgress.isExporting}
+              className="text-xs lg:text-sm"
+            >
+              {exportProgress.isExporting && exportProgress.type === 'pdf' ? 'Generating...' : 'Export PDF'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowBulkActions(!showBulkActions)}
+              className="text-xs lg:text-sm"
+            >
+              {showBulkActions ? 'Cancel' : 'Bulk Actions'}
+            </Button>
+            <div className="relative">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setShowColumnDropdown(!showColumnDropdown)}
+                className="text-xs lg:text-sm"
+              >
+                Columns ▼
+              </Button>
+              {showColumnDropdown && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-10" 
+                    onClick={() => setShowColumnDropdown(false)}
+                  />
+                  <div className="absolute right-0 mt-1 bg-card border rounded-lg shadow-lg p-2 space-y-1 z-20 min-w-[150px]">
+                    {Object.entries(visibleColumns).map(([key, visible]) => (
+                      <label key={key} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/50 p-1 rounded">
+                        <input
+                          type="checkbox"
+                          checked={visible}
+                          onChange={() => toggleColumn(key as keyof ColumnConfig)}
+                        />
+                        {key.charAt(0).toUpperCase() + key.slice(1)}
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -574,7 +583,7 @@ export function SessionList() {
         {/* Sticky Header with Filters */}
         <div className="sticky top-0 z-10 bg-card border-b">
           {/* Column Headers */}
-          <div className="flex items-center gap-4 px-4 py-3 font-medium text-sm border-b">
+          <div className="flex items-center gap-2 lg:gap-4 px-2 lg:px-4 py-3 font-medium text-xs lg:text-sm border-b">
             {showBulkActions && <div className="w-6"></div>}
             <div className="flex-1 min-w-0">
               <button
@@ -582,7 +591,7 @@ export function SessionList() {
                   sortBy: 'title',
                   sortOrder: urlState.sortBy === 'title' && urlState.sortOrder === 'asc' ? 'desc' : 'asc'
                 })}
-                className="flex items-center gap-1 hover:text-primary"
+                className="flex items-center gap-1 hover:text-primary text-xs lg:text-sm"
               >
                 Title
                 {urlState.sortBy === 'title' && (
@@ -590,31 +599,32 @@ export function SessionList() {
                 )}
               </button>
             </div>
-            <div className="text-center w-20">
-              <span className="text-sm font-medium">User</span>
+            <div className="text-center w-16 lg:w-20">
+              <span className="text-xs lg:text-sm font-medium">User</span>
             </div>
-            <div className="text-center w-32">
+            <div className="text-center w-24 lg:w-32">
               <button
                 onClick={() => updateUrlState({ 
                   sortBy: 'created_at',
                   sortOrder: urlState.sortBy === 'created_at' && urlState.sortOrder === 'asc' ? 'desc' : 'asc'
                 })}
-                className="flex items-center gap-1 hover:text-primary"
+                className="flex items-center gap-1 hover:text-primary text-xs lg:text-sm"
               >
-                Created At
+                <span className="hidden lg:inline">Created At</span>
+                <span className="lg:hidden">Date</span>
                 {urlState.sortBy === 'created_at' && (
                   <span>{urlState.sortOrder === 'asc' ? '↑' : '↓'}</span>
                 )}
               </button>
             </div>
             {visibleColumns.score && (
-              <div className="text-center w-16">
+              <div className="text-center w-12 lg:w-16">
                 <button
                   onClick={() => updateUrlState({ 
                     sortBy: 'score',
                     sortOrder: urlState.sortBy === 'score' && urlState.sortOrder === 'asc' ? 'desc' : 'asc'
                   })}
-                  className="flex items-center gap-1 hover:text-primary"
+                  className="flex items-center gap-1 hover:text-primary text-xs lg:text-sm"
                 >
                   Score
                   {urlState.sortBy === 'score' && (
@@ -623,18 +633,18 @@ export function SessionList() {
                 </button>
               </div>
             )}
-            {visibleColumns.confidence && <div className="text-center w-16">Confidence</div>}
-            {visibleColumns.clarity && <div className="text-center w-16">Clarity</div>}
-            {visibleColumns.listening && <div className="text-center w-16">Listening</div>}
-            {visibleColumns.duration && <div className="text-center w-20">Duration</div>}
+            {visibleColumns.confidence && <div className="text-center w-12 lg:w-16 text-xs lg:text-sm">Conf</div>}
+            {visibleColumns.clarity && <div className="text-center w-12 lg:w-16 text-xs lg:text-sm">Clarity</div>}
+            {visibleColumns.listening && <div className="text-center w-12 lg:w-16 text-xs lg:text-sm">Listen</div>}
+            {visibleColumns.duration && <div className="text-center w-16 lg:w-20 text-xs lg:text-sm">Duration</div>}
           </div>
           
           {/* Filter Row */}
-          <div className="flex items-center gap-4 px-4 py-2 bg-muted/30">
+          <div className="flex items-center gap-2 lg:gap-4 px-2 lg:px-4 py-2 bg-muted/30 overflow-x-auto">
             {showBulkActions && <div className="w-6"></div>}
             <div className="flex-1 min-w-0">
               <Input
-                placeholder="Search by title..."
+                placeholder="Search..."
                 value={localSearch}
                 onChange={(e) => {
                   const value = e.target.value
@@ -644,7 +654,7 @@ export function SessionList() {
                 className="h-8 text-xs"
               />
             </div>
-            <div className="w-20">
+            <div className="w-16 lg:w-20">
               <select
                 value={localTeam}
                 onChange={(e) => {
@@ -652,15 +662,15 @@ export function SessionList() {
                   setLocalTeam(value)
                   updateUrlState({ team: (value as 'Sales' | 'Executive' | 'Engineering') || undefined })
                 }}
-                className="h-8 px-2 text-xs border border-input rounded bg-background w-full"
+                className="h-8 px-1 lg:px-2 text-xs border border-input rounded bg-background w-full"
               >
-                <option value="">All Teams</option>
+                <option value="">All</option>
                 <option value="Sales">Sales</option>
-                <option value="Executive">Executive</option>
-                <option value="Engineering">Engineering</option>
+                <option value="Executive">Exec</option>
+                <option value="Engineering">Eng</option>
               </select>
             </div>
-            <div className="w-32">
+            <div className="w-24 lg:w-32">
               <div className="flex flex-col gap-1">
                 <Input
                   type="date"
@@ -683,7 +693,7 @@ export function SessionList() {
               </div>
             </div>
             {visibleColumns.score && (
-              <div className="w-16">
+              <div className="w-12 lg:w-16">
                 <div className="flex flex-col gap-1">
                   <Input
                     type="number"
@@ -732,10 +742,10 @@ export function SessionList() {
                 </div>
               </div>
             )}
-            {visibleColumns.confidence && <div className="w-16"></div>}
-            {visibleColumns.clarity && <div className="w-16"></div>}
-            {visibleColumns.listening && <div className="w-16"></div>}
-            {visibleColumns.duration && <div className="w-20"></div>}
+            {visibleColumns.confidence && <div className="w-12 lg:w-16"></div>}
+            {visibleColumns.clarity && <div className="w-12 lg:w-16"></div>}
+            {visibleColumns.listening && <div className="w-12 lg:w-16"></div>}
+            {visibleColumns.duration && <div className="w-16 lg:w-20"></div>}
           </div>
         </div>
         

@@ -48,9 +48,9 @@ function UserRow({ user, index, onClick, moveUser }: UserRowProps) {
       }`}
       onClick={onClick}
     >
-      <td className="px-4 py-3 font-medium">{user.first_name}</td>
-      <td className="px-4 py-3">
-        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+      <td className="px-2 lg:px-4 py-3 font-medium text-sm lg:text-base">{user.first_name}</td>
+      <td className="px-2 lg:px-4 py-3">
+        <span className={`px-1.5 lg:px-2 py-0.5 lg:py-1 rounded-full text-xs font-medium ${
           user.team === 'Sales' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
           user.team === 'Executive' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' :
           'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
@@ -58,14 +58,14 @@ function UserRow({ user, index, onClick, moveUser }: UserRowProps) {
           {user.team}
         </span>
       </td>
-      <td className="px-4 py-3">{user.total_sessions || 0}</td>
-      <td className={`px-4 py-3 font-medium ${getScoreColor(user.avg_score || 0)}`}>
+      <td className="px-2 lg:px-4 py-3 text-sm lg:text-base">{user.total_sessions || 0}</td>
+      <td className={`px-2 lg:px-4 py-3 font-medium text-sm lg:text-base ${getScoreColor(user.avg_score || 0)}`}>
         {formatScore(user.avg_score || 0)}
       </td>
-      <td className="px-4 py-3">
-        <span className="flex items-center gap-1">
+      <td className="px-2 lg:px-4 py-3">
+        <span className="flex items-center gap-1 text-sm lg:text-base">
           {getTrendIcon(user.recent_trend || 'stable')}
-          <span className="capitalize">{user.recent_trend || 'stable'}</span>
+          <span className="capitalize hidden sm:inline">{user.recent_trend || 'stable'}</span>
         </span>
       </td>
     </tr>
@@ -78,7 +78,7 @@ function UserModal({ user, isOpen, onClose }: { user: User | null, isOpen: boole
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`${user.first_name} - Performance Details`}>
       <div className="space-y-6">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
             <h3 className="font-medium text-muted-foreground">Team</h3>
             <p className="text-lg">{user.team}</p>
@@ -89,33 +89,33 @@ function UserModal({ user, isOpen, onClose }: { user: User | null, isOpen: boole
           </div>
         </div>
         
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
             <h3 className="font-medium text-muted-foreground">Average Score</h3>
-            <p className={`text-2xl font-bold ${getScoreColor(user.avg_score)}`}>
+            <p className={`text-xl lg:text-2xl font-bold ${getScoreColor(user.avg_score)}`}>
               {formatScore(user.avg_score)}
             </p>
           </div>
           <div className="space-y-2">
             <h3 className="font-medium text-muted-foreground">Best Session</h3>
-            <p className="text-2xl font-bold text-green-600">{user.best_session_score}</p>
+            <p className="text-xl lg:text-2xl font-bold text-green-600">{user.best_session_score}</p>
           </div>
         </div>
 
         <div className="space-y-4">
           <h3 className="font-medium">Detailed Metrics</h3>
-          <div className="grid grid-cols-3 gap-4">
-            <div className="text-center p-4 bg-muted rounded-lg">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="text-center p-3 lg:p-4 bg-muted rounded-lg">
               <p className="text-sm text-muted-foreground">Confidence</p>
-              <p className="text-xl font-semibold">{formatScore(user.avg_confidence)}</p>
+              <p className="text-lg lg:text-xl font-semibold">{formatScore(user.avg_confidence)}</p>
             </div>
-            <div className="text-center p-4 bg-muted rounded-lg">
+            <div className="text-center p-3 lg:p-4 bg-muted rounded-lg">
               <p className="text-sm text-muted-foreground">Clarity</p>
-              <p className="text-xl font-semibold">{formatScore(user.avg_clarity)}</p>
+              <p className="text-lg lg:text-xl font-semibold">{formatScore(user.avg_clarity)}</p>
             </div>
-            <div className="text-center p-4 bg-muted rounded-lg">
+            <div className="text-center p-3 lg:p-4 bg-muted rounded-lg">
               <p className="text-sm text-muted-foreground">Listening</p>
-              <p className="text-xl font-semibold">{formatScore(user.avg_listening)}</p>
+              <p className="text-lg lg:text-xl font-semibold">{formatScore(user.avg_listening)}</p>
             </div>
           </div>
         </div>
@@ -268,21 +268,21 @@ export function TeamOverview() {
         )}
 
         {/* Charts and Stats */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 lg:gap-8">
           <div className="flex flex-col space-y-4">
-            <h2 className="text-xl font-semibold">Team Performance</h2>
-            <div className="bg-card rounded-lg p-6 border h-full" data-chart="team-performance">
+            <h2 className="text-lg lg:text-xl font-semibold">Team Performance</h2>
+            <div className="bg-card rounded-lg p-4 lg:p-6 border h-full min-h-[300px]" data-chart="team-performance">
               <TeamPerformanceChart data={teamMetrics} />
             </div>
           </div>
 
           <div className="flex flex-col space-y-4">
-            <h2 className="text-xl font-semibold">Top Performers</h2>
-            <div className="bg-card rounded-lg p-6 border space-y-4 h-full">
+            <h2 className="text-lg lg:text-xl font-semibold">Top Performers</h2>
+            <div className="bg-card rounded-lg p-4 lg:p-6 border space-y-4 h-full min-h-[300px]">
               {topPerformers.map((user, index) => (
-                <div key={user.id} className="flex items-center justify-between">
+                <div key={user.id} className="flex items-center justify-between p-2 rounded hover:bg-muted/50">
                   <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                    <div className={`w-6 h-6 lg:w-8 lg:h-8 rounded-full flex items-center justify-center text-xs lg:text-sm font-bold ${
                       index === 0 ? 'bg-yellow-100 text-yellow-800' :
                       index === 1 ? 'bg-gray-100 text-gray-800' :
                       'bg-orange-100 text-orange-800'
@@ -290,15 +290,15 @@ export function TeamOverview() {
                       {index + 1}
                     </div>
                     <div>
-                      <p className="font-medium">{user.first_name}</p>
-                      <p className="text-sm text-muted-foreground">{user.team}</p>
+                      <p className="font-medium text-sm lg:text-base">{user.first_name}</p>
+                      <p className="text-xs lg:text-sm text-muted-foreground">{user.team}</p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className={`font-bold ${getScoreColor(user.avg_score || 0)}`}>
+                    <p className={`font-bold text-sm lg:text-base ${getScoreColor(user.avg_score || 0)}`}>
                       {formatScore(user.avg_score || 0)}
                     </p>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-xs lg:text-sm text-muted-foreground">
                       {user.total_sessions || 0} sessions
                     </p>
                   </div>
@@ -330,34 +330,36 @@ export function TeamOverview() {
 
         {/* Users Table */}
         <div className="bg-card rounded-lg border">
-          <div className="p-6 border-b">
-            <h2 className="text-xl font-semibold">
+          <div className="p-4 lg:p-6 border-b">
+            <h2 className="text-lg lg:text-xl font-semibold">
               All Users ({filteredUsers.length})
             </h2>
           </div>
-          <div className="overflow-x-auto max-h-96 overflow-y-auto">
-            <table className="w-full">
-              <thead className="bg-card sticky top-0 z-10 border-b">
-                <tr>
-                  <th className="px-4 py-3 text-left font-medium">Name</th>
-                  <th className="px-4 py-3 text-left font-medium">Team</th>
-                  <th className="px-4 py-3 text-left font-medium">Sessions</th>
-                  <th className="px-4 py-3 text-left font-medium">Avg Score</th>
-                  <th className="px-4 py-3 text-left font-medium">Trend</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {filteredUsers.map((user, index) => (
-                  <UserRow
-                    key={user.id}
-                    user={user}
-                    index={index}
-                    onClick={() => handleUserClick(user)}
-                    moveUser={moveUser}
-                  />
-                ))}
-              </tbody>
-            </table>
+          <div className="overflow-x-auto">
+            <div className="max-h-96 overflow-y-auto">
+              <table className="w-full min-w-[600px]">
+                <thead className="bg-card sticky top-0 z-10 border-b">
+                  <tr>
+                    <th className="px-2 lg:px-4 py-3 text-left font-medium text-sm lg:text-base">Name</th>
+                    <th className="px-2 lg:px-4 py-3 text-left font-medium text-sm lg:text-base">Team</th>
+                    <th className="px-2 lg:px-4 py-3 text-left font-medium text-sm lg:text-base">Sessions</th>
+                    <th className="px-2 lg:px-4 py-3 text-left font-medium text-sm lg:text-base">Avg Score</th>
+                    <th className="px-2 lg:px-4 py-3 text-left font-medium text-sm lg:text-base">Trend</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {filteredUsers.map((user, index) => (
+                    <UserRow
+                      key={user.id}
+                      user={user}
+                      index={index}
+                      onClick={() => handleUserClick(user)}
+                      moveUser={moveUser}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
